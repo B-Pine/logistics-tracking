@@ -77,8 +77,8 @@ def get_package_status(tracking_id):
             """
                 SELECT p.current_status, l.city || ', ' || l.state
                 FROM packages p
-                JOIN tracking_events e ON e.package_id = p.package_id
-                JOIN locations l ON l.location_id = e.location_id
+                JOIN tracking_events e USING (package_id)
+                JOIN locations l USING (location_id)
                 WHERE p.tracking_id = %s
                 ORDER BY e.event_timestamp DESC
                 LIMIT 1

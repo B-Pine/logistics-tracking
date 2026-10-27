@@ -1,7 +1,8 @@
 DROP TABLE IF EXISTS tracking_events, packages, shipments, locations, customers;
 
 CREATE TABLE customers (
-    customer_id SERIAL PRIMARY KEY,     -- the SERIAL will allow auto increment pri-key, here the alternative and the most practical way to do it would GENERATED ALWAYS AS IDENTITY
+    -- the SERIAL will allow auto increment pri-key, here the alternative and the most practical way to do it would GENERATED ALWAYS AS IDENTITY
+    customer_id SERIAL PRIMARY KEY,    
     name        VARCHAR(100) NOT NULL,
     email       VARCHAR(255) NOT NULL UNIQUE,
     phone       VARCHAR(20)

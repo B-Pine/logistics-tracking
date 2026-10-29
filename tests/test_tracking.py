@@ -1,11 +1,12 @@
 from pathlib import Path
+from datetime import timedelta
 
 import psycopg
 import pytest
 import redis
 
 from app.db import pg_pool, redis_client, scan_logs
-from app.tracking import get_package_status, process_tracking_scan
+from app.tracking import get_package_status, process_tracking_scan, get_package_history, get_scan_logs
 
 SQL_DIR = Path(__file__).parent.parent / "sql"
 
@@ -65,3 +66,20 @@ def test_scan_succeeds_when_redis_is_down(monkeypatch):
 def test_status_read_falls_back_to_postgres_and_refills_cache():
     assert get_package_status("TRK1001") == {"status": "Delivered", "location": "Atlanta, GA"}
     assert redis_client.get("package:TRK1001:status") is not None
+
+
+def test_history_is_ordered_with_time_between_scans():
+    history = get_package_history("TRK1001")
+    assert [h["status"] for h in history] == [
+        "Label Created", "Picked Up", "In Transit", "Out for Delivery", "Delivered"
+    ]
+    assert history[0]["time_since_previous"] is None
+    assert history[1]["time_since_previous"] == timedelta(hours=3)
+    assert get_package_history("TRK0000") == []
+
+
+def test_scan_logs_can_be_read_back():
+    process_tracking_scan(3, 2, "In Transit", scanner_id="SCN-LOU-01")
+    process_tracking_scan(3, 4, "Out for Delivery", scanner_id="DRV-ATL-17")
+    logs = get_scan_logs("TRK1003")
+    assert [log["scanner_id"] for log in logs] == ["SCN-LOU-01", "DRV-ATL-17"]

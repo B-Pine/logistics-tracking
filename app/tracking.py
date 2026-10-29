@@ -3,6 +3,7 @@ import logging
 
 import redis
 from pymongo.errors import PyMongoError
+from psycopg.rows import dict_row
 
 from app.db import pg_pool, redis_client, scan_logs
 
@@ -91,3 +92,34 @@ def get_package_status(tracking_id):
     payload = {"status": row[0], "location": row[1]}
     _cache_status(tracking_id, payload)  # refill the cache for next time
     return payload
+
+
+def get_package_history(tracking_id):
+    """Full tracking history, oldest first, with the time spent since the previous scan."""
+    with pg_pool.connection() as conn:
+        cur = conn.cursor(row_factory=dict_row)
+        return cur.execute(
+            """
+            WITH package AS (
+                SELECT package_id FROM packages WHERE tracking_id = %s
+            ),
+            events AS (
+                SELECT e.event_id, e.status, e.location_id, e.event_timestamp,
+                       LAG(e.event_timestamp) OVER (ORDER BY e.event_timestamp, e.event_id) AS previous_timestamp
+                FROM tracking_events e
+                JOIN package USING (package_id)
+            )
+            SELECT ev.status,
+                   l.city || ', ' || l.state AS location,
+                   ev.event_timestamp,
+                   ev.event_timestamp - ev.previous_timestamp AS time_since_previous
+            FROM events ev
+            JOIN locations l USING (location_id)
+            ORDER BY ev.event_timestamp, ev.event_id
+            """,
+            (tracking_id,),
+        ).fetchall()
+
+def get_scan_logs(tracking_id):
+    """Raw scanner logs from mongo Db, oldest first."""
+    return list(scan_logs.find({"tracking_id": tracking_id}, {"_id":0}).sort("scanned_at", 1))
